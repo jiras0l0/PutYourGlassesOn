@@ -14,6 +14,7 @@ import numpy as np
 import corrector as corrector
 from apscheduler.schedulers.blocking import BlockingScheduler
 from apscheduler.triggers.interval import IntervalTrigger
+import queue
 
 
 MODEL_DIR = os.path.join(os.path.dirname(__file__), "./model")  # default assume that our export is in this file's parent directory
@@ -97,33 +98,6 @@ class Model(object):
     def __del__(self):
         self.cleanup()
 
-
-        
-def __Rectangle__(image):
-
-    print(image.shape)
-
-    # Start coordinate, here (5, 5) 
-    # represents the top left corner of rectangle 
-    start_point = (50, 50) 
-    
-    # Ending coordinate, here (220, 220) 
-    # represents the bottom right corner of rectangle 
-    end_point = (image.shape[1] - 50 , image.shape[0] - 50) 
-    
-    # Blue color in BGR 
-    color = (100, 0, 0) 
-    
-    # Line thickness of 2 px 
-    thickness = 1
-    
-    # Using cv2.rectangle() method 
-    # Draw a rectangle with blue line borders of thickness of 2 px 
-    image = cv2.rectangle(image, start_point, end_point, color, thickness) 
-
-    return image
-
-
 def __KO_LAYER__(image):
     start_point = (50, 50) 
     end_point = (image.shape[1] - 50 , image.shape[0] - 50)
@@ -142,14 +116,83 @@ def __KO_LAYER__(image):
     #return cv2.rectangle(image, start_point, end_point, (0, 0, 255), -1)
 
 
-def some_job():
-    print ("Decorated job")
+def __WaitForFace__():
 
+        capture = cv2.VideoCapture(0, cv2.CAP_DSHOW)
+        
+        while(True):
+            ret, frame = capture.read()
+            img = Image.fromarray(frame, 'RGB')
+
+            #cv2.namedWindow("window", cv2.WND_PROP_FULLSCREEN)
+            #cv2.setWindowProperty("window",cv2.WND_PROP_FULLSCREEN,cv2.WINDOW_FULLSCREEN)
+            cv2.imshow('window', frame)
+            
+            # Our operations on the frame come here
+            result = model.predict(img)
+            q.put(result['Prediction'])
+
+            print("queue size", q.qsize(), 'prediction=', result['Prediction'])
+
+            countGlassOn = 0
+
+            if(q.qsize() >= 50):
+                while(q.empty() != True):
+                    if(q.get() == 'GlassOn'):
+                        countGlassOn += 1
+
+                if((countGlassOn / 40) > 0.9):
+                    capture.release()
+                    cv2.destroyAllWindows()
+                    scheduler.resume()
+                    return
+
+            if cv2.waitKey(1) & 0xFF == ord('q'):
+                break
+
+        # When everything done, release the capture
+        capture.release()
+        cv2.destroyAllWindows()
+
+def checkGlasses(): 
+
+    cap = cv2.VideoCapture(0, cv2.CAP_DSHOW)
+
+    while(True):
+        # Capture frame-by-frame
+        ret, frame = cap.read()
+        img = Image.fromarray(frame, 'RGB')
+        
+        # Our operations on the frame come here
+        result = model.predict(img)
+        q.put(result['Prediction'])
+
+        print("queue size", q.qsize(), 'prediction=', result['Prediction'])
+
+        countGlassOff = 0
+
+        if(q.qsize() >= 50):
+            while(q.empty() != True):
+                if(q.get() == 'GlassOff'):
+                    countGlassOff += 1
+
+            if((countGlassOff / 40) > 0.8):
+                scheduler.pause()
+                cap.release()
+                __WaitForFace__()
+                cv2.destroyAllWindows()
+
+            break
+
+    cap.release()
+    cv2.destroyAllWindows()
 
 try:
-    print('test')
+    q = queue.Queue()
+    model = Model()
+    model.load()
     scheduler = BlockingScheduler()
-    scheduler.add_job(some_job, 'interval', seconds=5, id='some_job_id')
+    scheduler.add_job(checkGlasses, 'interval', seconds=20, id='some_job_id')
     scheduler.start()
 except (KeyboardInterrupt, SystemExit):
     pass
