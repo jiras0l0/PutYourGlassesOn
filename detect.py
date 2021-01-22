@@ -11,6 +11,10 @@ import json
 import tensorflow as tf
 from PIL import Image
 import numpy as np
+import corrector as corrector
+from apscheduler.schedulers.blocking import BlockingScheduler
+from apscheduler.triggers.interval import IntervalTrigger
+
 
 MODEL_DIR = os.path.join(os.path.dirname(__file__), "./model")  # default assume that our export is in this file's parent directory
 
@@ -138,48 +142,14 @@ def __KO_LAYER__(image):
     #return cv2.rectangle(image, start_point, end_point, (0, 0, 255), -1)
 
 
-if __name__ == "__main__":
-    
+def some_job():
+    print ("Decorated job")
 
-    model = Model()
-    model.load()
-    cap = cv2.VideoCapture(0)
-    #cap = cv2.VideoCapture('rtsp://admin:bazar@192.168.1.55:554/cam/realmonitor?channel=1&subtype=1&unicast=true&proto=Onvif')
-    
 
-    while(True):
-        # Capture frame-by-frame
-        ret, frame = cap.read()
-        img = Image.fromarray(frame, 'RGB')
-        # Our operations on the frame come here
-        result = model.predict(img)
-    
-        if(result['Prediction'] == 'Sans masque'):
-            print(result)
-
-            # font 
-            font = cv2.FONT_HERSHEY_SIMPLEX 
-            
-            # org 
-            org = (200 , 30) 
-            
-            # fontScale 
-            fontScale = 1
-            
-            # Blue color in BGR 
-            color = (0, 0, 255) 
-            
-            # Line thickness of 2 px 
-            thickness = 2
-            frame = cv2.putText(frame, result['Prediction'], org, font,  fontScale, color, thickness, cv2.LINE_AA) 
-
-            frame = __KO_LAYER__(frame)
-           
-
-        cv2.imshow('frame', frame)
-        if cv2.waitKey(1) & 0xFF == ord('q'):
-            break        
-
-    # When everything done, release the capture
-    cap.release()
-    cv2.destroyAllWindows()
+try:
+    print('test')
+    scheduler = BlockingScheduler()
+    scheduler.add_job(some_job, 'interval', seconds=5, id='some_job_id')
+    scheduler.start()
+except (KeyboardInterrupt, SystemExit):
+    pass
